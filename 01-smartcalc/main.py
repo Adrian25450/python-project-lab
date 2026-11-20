@@ -52,12 +52,12 @@ def main():
             if expression.lower() in {"salir", "exit", "quit"}: break
             try:
                 result = calculate(expression); save_history(expression, result); print(f"= {result:g}")
-            except (ValueError, SyntaxError, ArithmeticError) as error: print(f"Error: {error}")
+            except (ValueError, SyntaxError, ArithmeticError, TypeError) as error: print(f"Error: {error}")
         return
     if not args.expression: parser.error("escribe una expresión o usa --interactive")
     try:
         result = calculate(args.expression); save_history(args.expression, result); print(f"{args.expression} = {result:g}")
-    except (ValueError, SyntaxError, ArithmeticError) as error: parser.error(str(error))
+    except (ValueError, SyntaxError, ArithmeticError, TypeError) as error: parser.error(str(error))
 
 if __name__ == "__main__": main()
 
