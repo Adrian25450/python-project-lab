@@ -1,19 +1,28 @@
 """Personal finance ledger backed by SQLite."""
 import argparse
 import csv
+from contextlib import contextmanager
 import sqlite3
 from datetime import date
 from pathlib import Path
 
 DB = Path(__file__).with_name("finanzas.db")
 
+@contextmanager
 def connect():
     db = sqlite3.connect(DB); db.row_factory = sqlite3.Row
     db.execute("""CREATE TABLE IF NOT EXISTS movements (
         id INTEGER PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('ingreso','gasto')),
         amount INTEGER NOT NULL CHECK(amount > 0), category TEXT NOT NULL,
         note TEXT NOT NULL DEFAULT '', occurred_on TEXT NOT NULL)""")
-    db.commit(); return db
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 def main():
     parser = argparse.ArgumentParser(description="Finanzas personales · registro local SQLite")
@@ -27,6 +36,7 @@ def main():
         with connect() as db:
             if args.command == "add":
                 if args.amount <= 0: parser.error("el monto debe ser mayor que cero")
+                if not args.category.strip(): parser.error("la categoría no puede estar vacía")
                 date.fromisoformat(args.date)
                 cur = db.execute("INSERT INTO movements(kind,amount,category,note,occurred_on) VALUES(?,?,?,?,?)", (args.kind,args.amount,args.category.strip(),args.note,args.date))
                 print(f"Movimiento #{cur.lastrowid} guardado · {args.kind} ${args.amount:,.0f} COP")
