@@ -2,10 +2,12 @@
 from flask import Flask, jsonify, request
 import sqlite3
 from pathlib import Path
+from contextlib import contextmanager
 
 app=Flask(__name__)
 DB=Path(__file__).with_name("inventario.db")
 
+@contextmanager
 def connect():
     db=sqlite3.connect(DB); db.row_factory=sqlite3.Row
     db.executescript("""CREATE TABLE IF NOT EXISTS products(
@@ -15,7 +17,14 @@ def connect():
       CREATE TABLE IF NOT EXISTS movements(
       id INTEGER PRIMARY KEY,product_id INTEGER NOT NULL REFERENCES products(id),kind TEXT NOT NULL,
       quantity INTEGER NOT NULL CHECK(quantity>0),note TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);""")
-    db.commit(); return db
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 def body_fields(data, create=False):
     if not isinstance(data,dict): raise ValueError("El cuerpo debe ser un objeto JSON")
@@ -53,6 +62,7 @@ def create_product():
     fields=body_fields(request.get_json(silent=True),True)
     with connect() as db:
         cur=db.execute("INSERT INTO products(sku,name,category,quantity,min_stock,unit_price) VALUES(:sku,:name,:category,:quantity,:min_stock,:unit_price)",fields)
+        if fields["quantity"]>0: db.execute("INSERT INTO movements(product_id,kind,quantity,note) VALUES(?,?,?,?)",(cur.lastrowid,"in",fields["quantity"],"Existencia inicial al crear producto"))
         product=dict(db.execute("SELECT * FROM products WHERE id=?",(cur.lastrowid,)).fetchone())
     return jsonify(product),201
 
